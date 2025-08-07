@@ -249,37 +249,95 @@ async def get_results(session_id: str):
 @app.get("/api/download/{session_id}/{file_type}")
 async def download_file(session_id: str, file_type: str):
     """Download generated files including UW template and CSV files."""
+    logger.info(f"🔽 Download request: session_id={session_id}, file_type={file_type}")
+    
     if session_id not in processing_sessions:
+        logger.error(f"❌ Session not found: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     
     session = processing_sessions[session_id]
+    logger.info(f"📋 Session status: {session.status}")
+    
     if session.status != "completed" or not session.results:
+        logger.error(f"❌ No files available for session {session_id}, status: {session.status}")
         raise HTTPException(status_code=400, detail="No files available")
+    
+    logger.info(f"📦 Available results: {list(session.results.keys())}")
     
     file_path = None
     if file_type == "uw_template":
         file_path = session.results.get("uw_template_path")
+        logger.info(f"🎯 UW Template path: {file_path}")
     elif file_type == "excel":
         file_path = session.results.get("excel_path")
+        logger.info(f"📊 Excel path: {file_path}")
     elif file_type == "pdf":
         file_path = session.results.get("pdf_path")
+        logger.info(f"📄 PDF path: {file_path}")
     elif file_type == "html":
         file_path = session.results.get("html_path")
+        logger.info(f"🌐 HTML path: {file_path}")
     elif file_type == "rent_roll_csv":
         file_path = session.results.get("rent_roll_csv_path")
+        logger.info(f"🏠 Rent Roll CSV path: {file_path}")
     elif file_type == "t12_csv":
         file_path = session.results.get("t12_csv_path")
+        logger.info(f"💰 T12 CSV path: {file_path}")
     else:
+        logger.error(f"❌ Invalid file type: {file_type}")
         raise HTTPException(status_code=400, detail="Invalid file type")
     
-    if not file_path or not os.path.exists(file_path):
+    if not file_path:
+        logger.error(f"❌ File path is None for {file_type}")
+        raise HTTPException(status_code=404, detail="File path not found")
+    
+    if not os.path.exists(file_path):
+        logger.error(f"❌ File does not exist: {file_path}")
+        # List files in outputs directory for debugging
+        try:
+            outputs_files = os.listdir("outputs")
+            logger.info(f"📁 Files in outputs directory: {outputs_files}")
+        except Exception as e:
+            logger.error(f"❌ Cannot list outputs directory: {e}")
         raise HTTPException(status_code=404, detail="File not found")
     
-    return FileResponse(
-        file_path,
-        media_type="application/octet-stream",
-        filename=os.path.basename(file_path)
-    )
+    # Get file info for logging
+    file_size = os.path.getsize(file_path)
+    logger.info(f"📏 File size: {file_size} bytes")
+    
+    # Determine proper media type based on file extension
+    file_extension = os.path.splitext(file_path)[1].lower()
+    logger.info(f"🔧 File extension: {file_extension}")
+    
+    media_type_mapping = {
+        '.pdf': 'application/pdf',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.xls': 'application/vnd.ms-excel',
+        '.csv': 'text/csv',
+        '.html': 'text/html',
+        '.txt': 'text/plain'
+    }
+    
+    media_type = media_type_mapping.get(file_extension, 'application/octet-stream')
+    logger.info(f"📋 Media type: {media_type}")
+    
+    filename = os.path.basename(file_path)
+    logger.info(f"📎 Filename: {filename}")
+    
+    try:
+        logger.info(f"🚀 Starting file download: {filename}")
+        return FileResponse(
+            file_path,
+            media_type=media_type,
+            filename=filename,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ FileResponse failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 async def process_documents_with_uw_template(
     session_id: str,
@@ -490,6 +548,13 @@ async def process_documents_with_uw_template(
         session.message = f"Professional UW package ready! Mode: {processing_mode}"
         
         # Store comprehensive results
+        logger.info(f"📦 Storing session results for {session_id}")
+        logger.info(f"📦 UW template path: {uw_template_path}")
+        logger.info(f"📦 Excel path: {excel_path}")
+        logger.info(f"📦 PDF path: {pdf_path}")
+        logger.info(f"📦 Rent roll CSV: {csv_files.get('rent_roll_csv')}")
+        logger.info(f"📦 T12 CSV: {csv_files.get('t12_csv')}")
+        
         session.results = {
             "session_id": session_id,
             "property_info": property_info.dict(),
@@ -507,6 +572,22 @@ async def process_documents_with_uw_template(
             },
             "timestamp": datetime.now().isoformat()
         }
+        
+        # Log final file verification
+        logger.info(f"📦 Final file verification:")
+        for file_type, file_path in [
+            ("UW Template", uw_template_path),
+            ("Excel", excel_path),
+            ("PDF", pdf_path),
+            ("Rent Roll CSV", csv_files.get('rent_roll_csv')),
+            ("T12 CSV", csv_files.get('t12_csv'))
+        ]:
+            if file_path:
+                exists = os.path.exists(file_path)
+                size = os.path.getsize(file_path) if exists else 0
+                logger.info(f"   {file_type}: {'✅' if exists else '❌'} {file_path} ({size} bytes)")
+            else:
+                logger.info(f"   {file_type}: ⚠️ No path set")
         
         logger.info(f"✅ Enhanced processing completed for session {session_id}")
         
@@ -529,34 +610,54 @@ class SimpleUWFiller:
         """Create UW package with real extracted data."""
         try:
             logger.info("🎯 Creating Simple UW Package with Real Data...")
+            logger.info(f"🎯 Template path: {self.template_path}")
+            logger.info(f"🎯 Template exists: {os.path.exists(self.template_path)}")
             
             # Get real extracted data
             real_data = self.processed_data.get('real_data_summary', {})
             rent_roll_data = real_data.get('rent_roll', {})
             t12_data = real_data.get('t12', {})
+            logger.info(f"🎯 Rent roll data keys: {list(rent_roll_data.keys())}")
+            logger.info(f"🎯 T12 data keys: {list(t12_data.keys())}")
             
             # Load template
+            logger.info("🎯 Loading Excel template...")
             wb = load_workbook(self.template_path)
+            logger.info(f"🎯 Available sheets: {wb.sheetnames}")
+            
             if 'UW' not in wb.sheetnames:
                 logger.error("❌ UW sheet not found!")
                 return None
             
             ws = wb['UW']
+            logger.info("🎯 UW sheet loaded successfully")
             
             # Fill with real data
+            logger.info("🎯 Filling template with data...")
             self.fill_with_real_data(ws, rent_roll_data, t12_data)
             
             # Save
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = f"outputs/Real_UW_Package_{timestamp}.xlsx"
+            logger.info(f"🎯 Saving to: {output_path}")
+            
             os.makedirs("outputs", exist_ok=True)
             wb.save(output_path)
             
-            logger.info(f"✅ UW Package created: {output_path}")
-            return output_path
+            # Verify file creation
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                logger.info(f"✅ UW Package created: {output_path} (size: {file_size} bytes)")
+                return output_path
+            else:
+                logger.error(f"❌ UW Package file not found after save: {output_path}")
+                return None
             
         except Exception as e:
             logger.error(f"❌ UW Package creation failed: {e}")
+            logger.error(f"❌ Exception details: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return None
     
     def fill_with_real_data(self, ws, rent_roll_data, t12_data):
@@ -786,18 +887,26 @@ def create_minimal_fallback():
 
 def generate_csv_files(processed_data, property_info, session_id):
     """Generate T12 and Rent Roll CSV files from processed data."""
+    logger.info(f"📊 Starting CSV generation for session: {session_id}")
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     # Clean property name for filename
     clean_property_name = "".join(c for c in property_info.property_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
     clean_property_name = clean_property_name.replace(' ', '_')
+    logger.info(f"🏷️ Clean property name: '{clean_property_name}'")
     
     csv_files = {}
     
     try:
+        logger.info(f"📋 Processed data keys: {list(processed_data.keys())}")
+        
         # Generate Rent Roll CSV
         rent_roll_data = processed_data.get('real_data_summary', {}).get('rent_roll', {})
+        logger.info(f"🏠 Rent roll data available: {bool(rent_roll_data)}")
+        logger.info(f"🏠 Rent roll units data: {bool(rent_roll_data.get('units_data'))}")
+        
         if rent_roll_data and rent_roll_data.get('units_data'):
+            logger.info(f"🏠 Processing rent roll data with {len(rent_roll_data['units_data'])} units")
             rent_roll_df = pd.DataFrame(rent_roll_data['units_data'])
             
             # Add summary data
@@ -809,6 +918,9 @@ def generate_csv_files(processed_data, property_info, session_id):
             
             # Create comprehensive rent roll CSV
             rent_roll_csv_path = f"outputs/{clean_property_name}_Rent_Roll_{timestamp}.csv"
+            logger.info(f"🏠 Creating rent roll CSV: {rent_roll_csv_path}")
+            os.makedirs("outputs", exist_ok=True)
+            
             with open(rent_roll_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 
@@ -841,13 +953,24 @@ def generate_csv_files(processed_data, property_info, session_id):
                         status
                     ])
             
-            csv_files['rent_roll_csv'] = rent_roll_csv_path
-            logger.info(f"✅ Generated Rent Roll CSV: {rent_roll_csv_path}")
+            # Verify file was created
+            if os.path.exists(rent_roll_csv_path):
+                file_size = os.path.getsize(rent_roll_csv_path)
+                logger.info(f"✅ Generated Rent Roll CSV: {rent_roll_csv_path} (size: {file_size} bytes)")
+                csv_files['rent_roll_csv'] = rent_roll_csv_path
+            else:
+                logger.error(f"❌ Rent Roll CSV file not created: {rent_roll_csv_path}")
+        else:
+            logger.warning(f"⚠️ No rent roll data available for CSV generation")
         
         # Generate T12 CSV
         t12_data = processed_data.get('real_data_summary', {}).get('t12', {})
+        logger.info(f"💰 T12 data available: {bool(t12_data)}")
+        
         if t12_data:
+            logger.info(f"💰 Processing T12 data")
             t12_csv_path = f"outputs/{clean_property_name}_T12_Operating_Statement_{timestamp}.csv"
+            logger.info(f"💰 Creating T12 CSV: {t12_csv_path}")
             
             with open(t12_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
@@ -893,13 +1016,23 @@ def generate_csv_files(processed_data, property_info, session_id):
                     expense_ratio = (total_expenses / total_revenue) * 100
                     writer.writerow(['Expense Ratio:', f"{expense_ratio:.1f}%"])
             
-            csv_files['t12_csv'] = t12_csv_path
-            logger.info(f"✅ Generated T12 CSV: {t12_csv_path}")
+            # Verify file was created
+            if os.path.exists(t12_csv_path):
+                file_size = os.path.getsize(t12_csv_path)
+                logger.info(f"✅ Generated T12 CSV: {t12_csv_path} (size: {file_size} bytes)")
+                csv_files['t12_csv'] = t12_csv_path
+            else:
+                logger.error(f"❌ T12 CSV file not created: {t12_csv_path}")
+        else:
+            logger.warning(f"⚠️ No T12 data available for CSV generation")
         
         # If no real data, create basic CSV files with template structure
         if not csv_files:
+            logger.info(f"📋 No real data available, creating basic CSV templates")
+            
             # Basic rent roll CSV
             rent_roll_csv_path = f"outputs/{clean_property_name}_Rent_Roll_{timestamp}.csv"
+            logger.info(f"🏠 Creating basic rent roll CSV: {rent_roll_csv_path}")
             basic_rent_roll = pd.DataFrame({
                 'Unit_Number': ['101', '102', '103', '201', '202'],
                 'Unit_Type': ['1BR/1BA', '1BR/1BA', '2BR/2BA', '1BR/1BA', '2BR/2BA'],
@@ -907,36 +1040,53 @@ def generate_csv_files(processed_data, property_info, session_id):
                 'Status': ['Occupied', 'Occupied', 'Occupied', 'Vacant', 'Occupied']
             })
             basic_rent_roll.to_csv(rent_roll_csv_path, index=False)
-            csv_files['rent_roll_csv'] = rent_roll_csv_path
+            
+            if os.path.exists(rent_roll_csv_path):
+                file_size = os.path.getsize(rent_roll_csv_path)
+                logger.info(f"✅ Created basic rent roll CSV: {rent_roll_csv_path} (size: {file_size} bytes)")
+                csv_files['rent_roll_csv'] = rent_roll_csv_path
             
             # Basic T12 CSV
             t12_csv_path = f"outputs/{clean_property_name}_T12_Operating_Statement_{timestamp}.csv"
+            logger.info(f"💰 Creating basic T12 CSV: {t12_csv_path}")
             basic_t12 = pd.DataFrame({
                 'Line_Item': ['Rental Income', 'Other Income', 'Total Revenue', 'Property Taxes', 'Insurance', 'Maintenance', 'Total Expenses', 'Net Operating Income'],
                 'Annual_Amount': [120000, 5000, 125000, 15000, 8000, 12000, 35000, 90000]
             })
             basic_t12.to_csv(t12_csv_path, index=False)
-            csv_files['t12_csv'] = t12_csv_path
+            
+            if os.path.exists(t12_csv_path):
+                file_size = os.path.getsize(t12_csv_path)
+                logger.info(f"✅ Created basic T12 CSV: {t12_csv_path} (size: {file_size} bytes)")
+                csv_files['t12_csv'] = t12_csv_path
             
             logger.info(f"✅ Generated basic CSV templates")
     
     except Exception as e:
         logger.error(f"❌ Error generating CSV files: {e}")
+        logger.error(f"❌ Exception details: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         # Return empty dict if generation fails
         csv_files = {}
     
+    logger.info(f"📊 CSV generation completed. Generated files: {list(csv_files.keys())}")
     return csv_files
 
 async def create_fallback_outputs(property_info):
     """Create simple fallback outputs with proper filenames."""
+    logger.info(f"📄 Creating fallback outputs for: {property_info.property_name}")
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     # Clean property name for filename (remove spaces and special chars)
     clean_property_name = "".join(c for c in property_info.property_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
     clean_property_name = clean_property_name.replace(' ', '_')
+    logger.info(f"🏷️ Clean filename base: '{clean_property_name}'")
     
     excel_path = f"outputs/{clean_property_name}_Analysis_{timestamp}.xlsx"
     pdf_path = f"outputs/{clean_property_name}_Summary_{timestamp}.pdf"
+    logger.info(f"📊 Target Excel path: {excel_path}")
+    logger.info(f"📄 Target PDF path: {pdf_path}")
     
     # Create simple Excel file
     df = pd.DataFrame({
@@ -944,14 +1094,145 @@ async def create_fallback_outputs(property_info):
         'Address': [property_info.property_address],
         'Transaction': [property_info.transaction_type]
     })
+    logger.info(f"📋 Created DataFrame with {len(df)} rows")
     
     os.makedirs("outputs", exist_ok=True)
-    df.to_excel(excel_path, index=False)
+    logger.info(f"📁 Ensured outputs directory exists")
     
-    # Create placeholder PDF
-    with open(pdf_path, 'w') as f:
-        f.write("PDF placeholder")
+    # Create Excel file with proper error handling
+    try:
+        logger.info(f"📊 Creating Excel file...")
+        df.to_excel(excel_path, index=False, engine='openpyxl')
+        
+        # Verify file creation
+        if os.path.exists(excel_path):
+            file_size = os.path.getsize(excel_path)
+            logger.info(f"✅ Created Excel file: {excel_path} (size: {file_size} bytes)")
+        else:
+            logger.error(f"❌ Excel file not found after creation: {excel_path}")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to create Excel file: {e}")
+        # Fallback to CSV if Excel fails
+        csv_path = excel_path.replace('.xlsx', '.csv')
+        logger.info(f"📄 Falling back to CSV: {csv_path}")
+        try:
+            df.to_csv(csv_path, index=False)
+            if os.path.exists(csv_path):
+                file_size = os.path.getsize(csv_path)
+                logger.info(f"✅ Created CSV fallback: {csv_path} (size: {file_size} bytes)")
+                excel_path = csv_path
+            else:
+                logger.error(f"❌ CSV fallback file not found: {csv_path}")
+        except Exception as csv_e:
+            logger.error(f"❌ CSV fallback also failed: {csv_e}")
     
+    # Create a proper PDF file (even if placeholder)
+    try:
+        logger.info(f"📄 Creating PDF file...")
+        # Create a simple PDF using reportlab if available, otherwise a proper binary placeholder
+        try:
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            
+            logger.info(f"📄 Using reportlab for PDF creation")
+            c = canvas.Canvas(pdf_path, pagesize=letter)
+            c.drawString(100, 750, f"Underwriting Summary - {property_info.property_name}")
+            c.drawString(100, 720, f"Address: {property_info.property_address}")
+            c.drawString(100, 690, f"Transaction Type: {property_info.transaction_type}")
+            c.drawString(100, 660, f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
+            c.drawString(100, 600, "This is a preliminary analysis placeholder.")
+            c.drawString(100, 580, "Full analysis requires document processing.")
+            c.save()
+            
+            # Verify PDF creation
+            if os.path.exists(pdf_path):
+                file_size = os.path.getsize(pdf_path)
+                logger.info(f"✅ Created PDF file with reportlab: {pdf_path} (size: {file_size} bytes)")
+            else:
+                logger.error(f"❌ PDF file not found after reportlab creation: {pdf_path}")
+                
+        except ImportError:
+            logger.info(f"⚠️ Reportlab not available, using minimal PDF structure")
+            # Fallback: Create a minimal valid PDF structure
+            pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 44 >>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Underwriting Summary) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000053 00000 n 
+0000000110 00000 n 
+0000000252 00000 n 
+0000000315 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+409
+%%EOF"""
+            
+            with open(pdf_path, 'wb') as f:
+                f.write(pdf_content)
+            
+            # Verify minimal PDF creation
+            if os.path.exists(pdf_path):
+                file_size = os.path.getsize(pdf_path)
+                logger.info(f"✅ Created minimal PDF file: {pdf_path} (size: {file_size} bytes)")
+            else:
+                logger.error(f"❌ Minimal PDF file not found after creation: {pdf_path}")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to create PDF file: {e}")
+        logger.error(f"❌ PDF Exception details: {type(e).__name__}: {str(e)}")
+        # Last resort: create an HTML file instead
+        html_path = pdf_path.replace('.pdf', '.html')
+        logger.info(f"🌐 Creating HTML fallback: {html_path}")
+        try:
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(f"""<!DOCTYPE html>
+<html>
+<head><title>Underwriting Summary</title></head>
+<body>
+    <h1>Underwriting Summary</h1>
+    <p><strong>Property:</strong> {property_info.property_name}</p>
+    <p><strong>Address:</strong> {property_info.property_address}</p>
+    <p><strong>Transaction:</strong> {property_info.transaction_type}</p>
+    <p><strong>Generated:</strong> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
+</body>
+</html>""")
+            
+            if os.path.exists(html_path):
+                file_size = os.path.getsize(html_path)
+                logger.info(f"✅ Created HTML fallback: {html_path} (size: {file_size} bytes)")
+                pdf_path = html_path
+            else:
+                logger.error(f"❌ HTML fallback file not found: {html_path}")
+                
+        except Exception as html_e:
+            logger.error(f"❌ HTML fallback also failed: {html_e}")
+    
+    logger.info(f"📄 Fallback outputs completed - Excel: {excel_path}, PDF: {pdf_path}")
     return excel_path, pdf_path
 
 if __name__ == "__main__":
