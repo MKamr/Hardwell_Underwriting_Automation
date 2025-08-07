@@ -273,37 +273,37 @@ async def process_with_fallback_mode(
 ):
     """Process documents using fallback simulation mode when real components aren't available."""
     session = processing_sessions[session_id]
-    
-    # Categorize files by type
-    rent_roll_files = [f for f, t in file_type_mapping.items() if t == 'rent_roll']
-    t12_files = [f for f, t in file_type_mapping.items() if t == 't12']
-    additional_files = [f for f, t in file_type_mapping.items() if t == 'additional']
-    
+        
+        # Categorize files by type
+        rent_roll_files = [f for f, t in file_type_mapping.items() if t == 'rent_roll']
+        t12_files = [f for f, t in file_type_mapping.items() if t == 't12']
+        additional_files = [f for f, t in file_type_mapping.items() if t == 'additional']
+        
     # Step 1: Simulate Document Processing
     update_progress(session_id, 1, "Document Processing (Simulation)", 
                    f"Simulating processing of {len(uploaded_files)} documents...")
-    await asyncio.sleep(2)
-    
+        await asyncio.sleep(2)
+        
     # Step 2-8: Continue with existing simulation logic
     # Calculate estimated units and basic metrics
-    base_rent_per_unit = 1200 if "apartment" in property_info.property_name.lower() else 1500
+        base_rent_per_unit = 1200 if "apartment" in property_info.property_name.lower() else 1500
     estimated_units = max(50, len(uploaded_files) * 15)
-    
-    # Calculate quality score based on available files
-    quality_score = 0
-    if rent_roll_files: quality_score += 40
-    if t12_files: quality_score += 40
-    if additional_files: quality_score += 20
-    
+        
+        # Calculate quality score based on available files
+        quality_score = 0
+        if rent_roll_files: quality_score += 40
+        if t12_files: quality_score += 40
+        if additional_files: quality_score += 20
+        
     # Calculate financial metrics
-    if rent_roll_files:
-        gross_potential_income = base_rent_per_unit * estimated_units * 12
+        if rent_roll_files:
+            gross_potential_income = base_rent_per_unit * estimated_units * 12
         vacancy_factor = 0.05 if t12_files else 0.08
-    else:
-        gross_potential_income = base_rent_per_unit * estimated_units * 12 * 0.85
-        vacancy_factor = 0.10
-    
-    effective_gross_income = gross_potential_income * (1 - vacancy_factor)
+        else:
+            gross_potential_income = base_rent_per_unit * estimated_units * 12 * 0.85
+            vacancy_factor = 0.10
+        
+        effective_gross_income = gross_potential_income * (1 - vacancy_factor)
     expense_ratio = 0.35 if property_info.is_bridge_loan else 0.32
     operating_expenses = effective_gross_income * expense_ratio
     noi = effective_gross_income - operating_expenses
@@ -607,8 +607,8 @@ async def process_with_real_components(
             vacancy_factor = 0.05 if t12_analysis else 0.08
             effective_gross_income = gross_potential_income * (1 - vacancy_factor)
             expense_ratio = 0.35 if property_info.is_bridge_loan else 0.32
-            operating_expenses = effective_gross_income * expense_ratio
-            noi = effective_gross_income - operating_expenses
+        operating_expenses = effective_gross_income * expense_ratio
+        noi = effective_gross_income - operating_expenses
         
         # Calculate quality score based on actual processing results
         quality_score = 0
