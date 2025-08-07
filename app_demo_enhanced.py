@@ -59,8 +59,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Ensure directories exist
+os.makedirs("static", exist_ok=True)
+os.makedirs("templates", exist_ok=True)
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("outputs", exist_ok=True)
+
+# Static files - mount with check
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except RuntimeError:
+    # If static directory is empty or doesn't exist, create a basic one
+    os.makedirs("static", exist_ok=True)
+    with open("static/app.css", "w") as f:
+        f.write("/* Hardwell Underwriting Automation */")
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # In-memory storage for processing status
 processing_sessions = {}
