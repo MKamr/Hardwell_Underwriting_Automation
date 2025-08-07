@@ -104,6 +104,16 @@ class PropertyInfo(BaseModel):
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment monitoring."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.head("/")
+async def head_root():
+    """Handle HEAD requests for health checks."""
+    return {"status": "ok"}
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main application page."""
@@ -786,4 +796,14 @@ if __name__ == "__main__":
     import os
     
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.environ.get("HOST", "0.0.0.0")
+    
+    print(f"🚀 Starting Hardwell Underwriting Automation on {host}:{port}")
+    
+    uvicorn.run(
+        app, 
+        host=host, 
+        port=port,
+        access_log=True,
+        log_level="info"
+    )
