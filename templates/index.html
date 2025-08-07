@@ -222,6 +222,10 @@
                     <div class="step-indicator w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-600" data-step="6">6</div>
                     <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
                     <div class="step-indicator w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-600" data-step="7">7</div>
+                    <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                    <div class="step-indicator w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-600" data-step="8">8</div>
+                    <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                    <div class="step-indicator w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-600" data-step="9">9</div>
                 </div>
 
                 <!-- Progress Bar -->
@@ -344,6 +348,28 @@
                         Download Professional UW Template
                         <span class="ml-2 bg-yellow-400 text-black px-2 py-1 rounded text-xs font-bold">NEW!</span>
                     </button>
+                    
+                    <!-- CSV Downloads Section -->
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 class="text-lg font-semibold text-blue-800 mb-3 flex items-center">
+                            <i class="fas fa-table mr-2"></i>
+                            CSV Data Files
+                        </h4>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button id="downloadRentRollCSV" class="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md font-semibold hover:bg-blue-700 transition duration-200 flex items-center justify-center">
+                                <i class="fas fa-home mr-2"></i>
+                                Download Rent Roll CSV
+                            </button>
+                            <button id="downloadT12CSV" class="flex-1 bg-teal-600 text-white py-3 px-4 rounded-md font-semibold hover:bg-teal-700 transition duration-200 flex items-center justify-center">
+                                <i class="fas fa-chart-line mr-2"></i>
+                                Download T12 CSV
+                            </button>
+                        </div>
+                        <p class="text-xs text-blue-600 mt-2 text-center">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            CSV files contain detailed rent roll and financial data for analysis
+                        </p>
+                    </div>
                     
                     <!-- Secondary Downloads -->
                     <div class="flex flex-col sm:flex-row gap-4">
@@ -502,6 +528,8 @@
             document.getElementById('downloadUWTemplate').addEventListener('click', () => downloadFile('uw_template'));
             document.getElementById('downloadExcel').addEventListener('click', () => downloadFile('excel'));
             document.getElementById('downloadPDF').addEventListener('click', () => downloadFile('pdf'));
+            document.getElementById('downloadRentRollCSV').addEventListener('click', () => downloadFile('rent_roll_csv'));
+            document.getElementById('downloadT12CSV').addEventListener('click', () => downloadFile('t12_csv'));
             document.getElementById('updatePDF').addEventListener('click', updatePDFPackage);
         }
 
